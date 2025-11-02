@@ -1,0 +1,20 @@
+@startuml
+actor App as "应用（RedissonClient）"
+participant Redis as "Redis Server"
+participant PubSub as "Redis Pub/Sub Channel"
+participant LocalCache as "本地缓存（demoLocalMap）"
+
+== 新增 key ==
+App -> Redis : HSET demoLocalMap jwxa test
+Redis --> App : OK
+App -> LocalCache : 更新本地缓存 jwxa=test
+
+Redis -> PubSub : PUBLISH __keyspace@0__:demoLocalMap {"type":"hset","field":"jwxa"}
+PubSub -> App : 消息推送
+App -> LocalCache : 确认并保持本地缓存一致
+
+== TTL 过期 ==
+Redis -> PubSub : PUBLISH __keyevent@0__:expired demoLocalMap: jwxa
+PubSub -> App : 过期通知
+App -> LocalCache : 删除本地缓存 jwxa
+@enduml

@@ -1,0 +1,59 @@
+services:
+  redis-node-1:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7201"]
+    ports:
+      - "7201:7201"
+      - "7301:7301"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-node-2:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7202"]
+    ports:
+      - "7202:7202"
+      - "7302:7302"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-node-3:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7203"]
+    ports:
+      - "7203:7203"
+      - "7303:7303"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-node-4:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7204"]
+    ports:
+      - "7204:7204"
+      - "7304:7304"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-node-5:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7205"]
+    ports:
+      - "7205:7205"
+      - "7305:7305"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-node-6:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7206"]
+    ports:
+      - "7206:7206"
+      - "7306:7306"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-cluster-creator:
+    image: redis:7.4
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+    command: ["/bin/sh", "-c", "sleep 5 && redis-cli -a 'pass@123' --cluster create redis-node-1:7201 redis-node-2:7202 redis-node-3:7203 redis-node-4:7204 redis-node-5:7205 redis-node-6:7206 --cluster-replicas 1 --cluster-yes"]

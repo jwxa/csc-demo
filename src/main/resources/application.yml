@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: caffeine-redisson-demo
+  cache:
+    type: none   # 我们用自定义 CacheManager，而不是默认的 redis/caffeine
+#  data:
+#    redis:
+#      host: localhost
+#      port: 6379
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+redisson:
+  # 如果是 cluster/mode 哨兵，可以换成：
+  clusterServersConfig:
+    nodeAddresses:
+      - "redis://127.0.0.1:7201"
+      - "redis://127.0.0.1:7202"
+      - "redis://127.0.0.1:7203"
+      - "redis://127.0.0.1:7204"
+      - "redis://127.0.0.1:7205"
+      - "redis://127.0.0.1:7206"
+    password: "pass@123"
+#  address: "redis://127.0.0.1:16379"
+
+server:
+  port: 18080

@@ -1,0 +1,31 @@
+@startuml
+title CSC Hash Invalidation Flow
+
+actor Client as C
+participant "Spring Boot\nScenario Controller" as S
+participant "Redisson CSC Map\n(Local Cache)" as L
+participant "Redis Cluster" as R
+participant "Other Node\n(模拟实例)" as O
+
+C -> S : POST /scenario/near-cache/hash-invalidation\n{ key, field, initialValue }
+S -> L : put(key, {field: initialValue})\n(client-side cache warmup)
+L -> R : publish initial hash\n(synchronised write)
+R --> L : ACK + local cache populated
+
+note over L
+client-side cache now\n holds the hash locally
+end note
+
+... 另一节点突变 ...
+O -> R : HSET key field updatedValue\n(非 CSC 客户端)
+R -> L : invalidate notification via PUB/SUB
+L -> L : remove local entry for key
+
+... 等待 awaitMillis ...
+S -> L : get(key)
+L -> R : cache miss -> fetch latest hash
+R --> L : {field: updatedValue}
+L --> S : 返回新的 hash
+S --> C : Response (steps[], context)\n包含 local 与 remote 的对比
+
+@enduml

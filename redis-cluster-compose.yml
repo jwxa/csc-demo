@@ -1,0 +1,98 @@
+services:
+  redis-node-1:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7201"]
+    ports:
+      - "7201:7201"
+      - "7301:7301"
+    network_mode: "host"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-node-2:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7202"]
+    ports:
+      - "7202:7202"
+      - "7302:7302"
+    expose:
+      - "7202"
+      - "7302"
+    network_mode: "host"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-node-3:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7203"]
+    ports:
+      - "7203:7203"
+      - "7303:7303"
+    expose:
+      - "7203"
+      - "7303"
+    network_mode: "host"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-node-4:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7204"]
+    ports:
+      - "6379"
+      - "7204:7204"
+      - "7304:7304"
+    expose:
+      - "7204"
+      - "7304"
+    network_mode: "host"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-node-5:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7205"]
+    ports:
+      - "7205:7205"
+      - "7305:7305"
+    expose:
+      - "6379"
+      - "7205"
+      - "7305"
+    network_mode: "host"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-node-6:
+    image: redis:7.4
+    command: ["/tmp/redis.sh", "7206"]
+    ports:
+      - "7206:7206"
+      - "7306:7306"
+    expose:
+      - "6379"
+      - "7206"
+      - "7306"
+    network_mode: "host"
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+  redis-cluster-creator:
+    image: redis:7.4
+    network_mode: "host"
+    volumes:
+      - ./create.sh:/tmp/create.sh
+    command: redis-cli -a 'pass@123' --cluster create host.docker.internal:7201 host.docker.internal:7202 host.docker.internal:7203 host.docker.internal:7204 host.docker.internal:7205 host.docker.internal:7206  --cluster-replicas 1 --cluster-yes
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+#  redis-insight:
+#    container_name: redis-insight
+#    image: redislabs/redisinsight:latest
+#    environment:
+#      - RI_REDIS_HOST=host.docker.internal
+#      - RI_REDIS_PORT=7201
+#      - RI_REDIS_PASSWORD=pass@123
+#      - RI_REDIS_ALIAS=MyRedisCluster
+#    network_mode: "host"
+#    ports:
+#      - 8001:8001
+#      - 5540:5540

@@ -1,0 +1,452 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>CSC 场景可视化演练</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            font-family: "Segoe UI", Arial, sans-serif;
+        }
+        body {
+            margin: 0;
+            padding: 24px;
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            color: #f8fafc;
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 28px;
+            letter-spacing: 1px;
+        }
+        .panel {
+            background: rgba(15, 23, 42, 0.85);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 20px 45px rgba(14, 116, 144, 0.35);
+            max-width: 1100px;
+            margin-bottom: 32px;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        select, input, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            background: rgba(15, 23, 42, 0.6);
+            color: #e2e8f0;
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+            font-family: Consolas, monospace;
+        }
+        button {
+            cursor: pointer;
+            border: none;
+            padding: 10px 18px;
+            margin-right: 12px;
+            border-radius: 999px;
+            font-weight: 600;
+            color: #0f172a;
+            background: #38bdf8;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button.secondary {
+            background: rgba(148, 163, 184, 0.35);
+            color: #e2e8f0;
+        }
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(56, 189, 248, 0.45);
+        }
+        button.secondary:hover {
+            box-shadow: 0 12px 24px rgba(148, 163, 184, 0.3);
+        }
+        .steps-container {
+            display: grid;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .step-card {
+            border-radius: 14px;
+            padding: 16px;
+            border: 1px solid rgba(94, 234, 212, 0.2);
+            background: rgba(15, 23, 42, 0.6);
+            opacity: 0.25;
+            transform: scale(0.96);
+            transition: opacity 0.35s ease, transform 0.35s ease, border-color 0.35s ease;
+        }
+        .step-card.active {
+            opacity: 1;
+            transform: scale(1);
+            border-color: rgba(94, 234, 212, 0.6);
+            box-shadow: 0 16px 32px rgba(94, 234, 212, 0.25);
+        }
+        .step-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .step-code {
+            font-weight: 700;
+            font-size: 16px;
+            color: #5eead4;
+        }
+        .step-desc {
+            margin: 12px 0;
+            line-height: 1.55;
+        }
+        .json-preview {
+            font-family: Consolas, monospace;
+            background: rgba(10, 12, 18, 0.75);
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(30, 41, 59, 0.6);
+            max-height: 160px;
+            overflow: auto;
+            color: #bae6fd;
+        }
+        .status-bar {
+            margin-bottom: 18px;
+            color: #facc15;
+        }
+        .status-bar.success {
+            color: #86efac;
+        }
+        .status-bar.error {
+            color: #fca5a5;
+        }
+        .controls {
+            margin-top: 8px;
+        }
+        .context-area {
+            margin-top: 12px;
+            font-size: 14px;
+            color: #cbd5f5;
+        }
+        .context-area code {
+            background: rgba(30, 41, 59, 0.75);
+            padding: 2px 6px;
+            border-radius: 6px;
+            color: #bae6fd;
+        }
+        @media (min-width: 860px) {
+            .form-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="panel">
+    <h1>Client-Side Caching 场景可视化</h1>
+    <p>选择场景并填写参数，点击「执行场景」获得令牌，随后通过「下一步」按钮逐步执行真实操作；点击「重置」可取消当前会话。</p>
+
+    <div class="status-bar" id="statusBar">尚未执行任何场景。</div>
+
+    <label for="scenarioSelect">演练场景 / Scenario</label>
+    <select id="scenarioSelect">
+        <option value="invalidation">Key 无效化（near-cache/invalidation）</option>
+        <option value="hash-invalidation">Hash 字段无效化（near-cache/hash-invalidation）</option>
+        <option value="ttl-drift">TTL 漏斗（near-cache/ttl-drift）</option>
+        <option value="csc-state">CSC Bucket 状态（GET /scenario/csc/state）</option>
+    </select>
+
+    <div id="formContainer"></div>
+
+    <div class="controls">
+        <button id="runBtn">执行场景</button>
+        <button class="secondary" id="nextBtn" disabled>下一步</button>
+        <button class="secondary" id="resetBtn" disabled>重置</button>
+    </div>
+</div>
+
+<div class="panel">
+    <h2>步骤回放 / Step Playback</h2>
+    <div class="context-area" id="contextArea">执行后将在此显示返回的 context 信息。</div>
+    <div class="steps-container" id="stepsContainer"></div>
+</div>
+
+<script>
+    const statusBar = document.getElementById('statusBar');
+    const scenarioSelect = document.getElementById('scenarioSelect');
+    const formContainer = document.getElementById('formContainer');
+    const stepsContainer = document.getElementById('stepsContainer');
+    const nextBtn = document.getElementById('nextBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const runBtn = document.getElementById('runBtn');
+    const contextArea = document.getElementById('contextArea');
+
+    let playbackToken = null;
+    let receivedSteps = [];
+
+    const scenarioForms = {
+        invalidation: `
+            <div class="form-grid">
+                <div>
+                    <label>Key</label>
+                    <input id="invKey" value="user:128">
+                </div>
+                <div>
+                    <label>awaitMillis</label>
+                    <input id="invAwait" value="500" type="number" min="0">
+                </div>
+                <div>
+                    <label>initialValue</label>
+                    <textarea id="invInitial">{"name":"alpha","version":1}</textarea>
+                </div>
+                <div>
+                    <label>updatedValue</label>
+                    <textarea id="invUpdated">{"name":"alpha","version":2}</textarea>
+                </div>
+            </div>` ,
+        "hash-invalidation": `
+            <div class="form-grid">
+                <div>
+                    <label>Hash Key</label>
+                    <input id="hashKey" value="profile:2001">
+                </div>
+                <div>
+                    <label>Field</label>
+                    <input id="hashField" value="email">
+                </div>
+                <div>
+                    <label>awaitMillis</label>
+                    <input id="hashAwait" value="500" type="number" min="0">
+                </div>
+                <div>
+                    <label>initialValue</label>
+                    <textarea id="hashInitial">alpha@example.com</textarea>
+                </div>
+                <div>
+                    <label>updatedValue</label>
+                    <textarea id="hashUpdated">beta@example.com</textarea>
+                </div>
+            </div>` ,
+        "ttl-drift": `
+            <div class="form-grid">
+                <div>
+                    <label>Key</label>
+                    <input id="ttlKey" value="inventory:sku-1001">
+                </div>
+                <div>
+                    <label>Value</label>
+                    <input id="ttlValue" value="stock-12">
+                </div>
+                <div>
+                    <label>redisTtlSeconds</label>
+                    <input id="ttlSeconds" value="3" type="number" min="1">
+                </div>
+                <div>
+                    <label>waitMillis</label>
+                    <input id="ttlWait" value="6000" type="number" min="1">
+                </div>
+            </div>` ,
+        "csc-state": `
+            <p>调用 <code>GET /scenario/csc/state</code> 观察 CSC bucket 当前状态。</p>`
+    };
+
+    function renderForm() {
+        formContainer.innerHTML = scenarioForms[scenarioSelect.value] || '';
+    }
+
+    scenarioSelect.addEventListener('change', renderForm);
+
+    async function resetPlayback() {
+        if (playbackToken) {
+            try {
+                await fetch('/scenario/playback/reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: playbackToken })
+                });
+            } catch (err) {
+                console.warn('reset playback failed', err);
+            }
+        }
+        playbackToken = null;
+        receivedSteps = [];
+        stepsContainer.innerHTML = '';
+        nextBtn.disabled = true;
+        resetBtn.disabled = true;
+        contextArea.textContent = '执行后将在此显示返回的 context 信息。';
+    }
+
+    function setStatus(message, type = 'info') {
+        statusBar.textContent = message;
+        statusBar.className = 'status-bar';
+        if (type === 'success') {
+            statusBar.classList.add('success');
+        } else if (type === 'error') {
+            statusBar.classList.add('error');
+        }
+    }
+
+    function appendStep(step) {
+        const index = receivedSteps.length;
+        receivedSteps.push(step);
+        const card = document.createElement('div');
+        card.className = 'step-card';
+        card.dataset.index = index;
+
+        const header = document.createElement('div');
+        header.className = 'step-header';
+        const code = document.createElement('div');
+        code.className = 'step-code';
+        code.textContent = step.code;
+        const order = document.createElement('div');
+        order.textContent = `#${index + 1}`;
+        header.appendChild(code);
+        header.appendChild(order);
+
+        const desc = document.createElement('div');
+        desc.className = 'step-desc';
+        desc.textContent = step.description;
+
+        card.appendChild(header);
+        card.appendChild(desc);
+
+        if (step.observations && Object.keys(step.observations).length > 0) {
+            const obs = document.createElement('pre');
+            obs.className = 'json-preview';
+            obs.textContent = JSON.stringify(step.observations, null, 2);
+            card.appendChild(obs);
+        }
+        stepsContainer.appendChild(card);
+
+        requestAnimationFrame(() => {
+            card.classList.add('active');
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    }
+
+    async function runScenario() {
+        await resetPlayback();
+        const scenario = scenarioSelect.value;
+
+        let payload;
+        if (scenario === 'invalidation') {
+            payload = {
+                scenario: 'invalidation',
+                parameters: {
+                    key: document.getElementById('invKey').value,
+                    initialValue: document.getElementById('invInitial').value,
+                    updatedValue: document.getElementById('invUpdated').value,
+                    awaitMillis: Number(document.getElementById('invAwait').value || 0)
+                }
+            };
+        } else if (scenario === 'hash-invalidation') {
+            payload = {
+                scenario: 'hash-invalidation',
+                parameters: {
+                    key: document.getElementById('hashKey').value,
+                    field: document.getElementById('hashField').value,
+                    initialValue: document.getElementById('hashInitial').value,
+                    updatedValue: document.getElementById('hashUpdated').value,
+                    awaitMillis: Number(document.getElementById('hashAwait').value || 0)
+                }
+            };
+        } else if (scenario === 'ttl-drift') {
+            payload = {
+                scenario: 'ttl-drift',
+                parameters: {
+                    key: document.getElementById('ttlKey').value,
+                    value: document.getElementById('ttlValue').value,
+                    redisTtlSeconds: Number(document.getElementById('ttlSeconds').value || 1),
+                    waitMillis: Number(document.getElementById('ttlWait').value || 1000)
+                }
+            };
+        } else if (scenario === 'csc-state') {
+            payload = {
+                scenario: 'csc-state',
+                parameters: {}
+            };
+        } else {
+            setStatus('未知场景类型。', 'error');
+            return;
+        }
+
+        try {
+            setStatus('执行中，请稍候...');
+            const startResp = await fetch('/scenario/playback/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!startResp.ok) {
+                throw new Error(`HTTP ${startResp.status}`);
+            }
+            const startResult = await startResp.json();
+            playbackToken = startResult.token;
+            resetBtn.disabled = true;
+            nextBtn.disabled = false;
+            contextArea.textContent = `Scenario: ${startResult.scenarioCode} | steps: ${startResult.totalSteps} | context: ${JSON.stringify(startResult.context || {}, null, 2)}`;
+
+            if (startResult.totalSteps === 0) {
+                setStatus('场景未返回任何步骤。', 'error');
+                nextBtn.disabled = true;
+                playbackToken = null;
+                return;
+            }
+
+            resetBtn.disabled = false;
+            setStatus('场景初始化完成，点击「下一步」逐步执行。', 'success');
+            await fetchNextStep();
+
+        } catch (err) {
+            console.error(err);
+            setStatus(`执行失败: ${err.message}`, 'error');
+        }
+    }
+
+    async function fetchNextStep() {
+        if (!playbackToken) {
+            setStatus('未初始化场景。', 'error');
+            return;
+        }
+        try {
+            const resp = await fetch('/scenario/playback/next', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: playbackToken })
+            });
+            if (resp.status === 404) {
+                setStatus('场景未找到或已过期。', 'error');
+                nextBtn.disabled = true;
+                playbackToken = null;
+                return;
+            }
+            const payload = await resp.json();
+            if (payload.step) {
+                appendStep(payload.step);
+                setStatus(`当前步骤：${payload.step.code}，剩余 ${payload.remainingSteps} 步`, 'info');
+            }
+            if (payload.completed) {
+                setStatus('全部步骤播放完成。', 'success');
+                nextBtn.disabled = true;
+                playbackToken = null;
+            }
+        } catch (err) {
+            console.error(err);
+            setStatus(`获取步骤失败: ${err.message}`, 'error');
+        }
+    }
+
+    resetBtn.addEventListener('click', () => resetPlayback());
+    nextBtn.addEventListener('click', fetchNextStep);
+    runBtn.addEventListener('click', runScenario);
+
+    renderForm();
+    resetPlayback();
+</script>
+</body>
+</html>
