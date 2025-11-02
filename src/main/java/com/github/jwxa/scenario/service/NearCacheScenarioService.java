@@ -70,6 +70,25 @@ public class NearCacheScenarioService {
                 "After the wait window compare local and remote values",
                 Map.of("local", localAfter, "remote", remoteAfter)));
 
+        Map<String, Object> finalObservation = new HashMap<>();
+        finalObservation.put("key", request.key());
+        finalObservation.put("remote", remoteAfter);
+        finalObservation.put("localImmediate", localAfter);
+        boolean consistent = remoteAfter == null ? localAfter == null : remoteAfter.equals(localAfter);
+        finalObservation.put("consistentImmediately", consistent);
+        if (!consistent) {
+            long extraWait = Math.max(100L, request.awaitMillis());
+            waitQuietly(extraWait);
+            String localAfterDelay = scenarioClientSideCachingMap.get(request.key());
+            finalObservation.put("localAfterDelay", localAfterDelay);
+            finalObservation.put("extraWaitMillis", extraWait);
+            boolean consistentAfterDelay = remoteAfter == null ? localAfterDelay == null : remoteAfter.equals(localAfterDelay);
+            finalObservation.put("consistentAfterDelay", consistentAfterDelay);
+        }
+        steps.add(step("eventual-check",
+                "Re-check consistency after optional extra wait to demonstrate eventual convergence",
+                finalObservation));
+
         log.info("[Scenario] invalidation -> key={} initial={} updated={} localAfter={}",
                 request.key(), request.initialValue(), request.updatedValue(), localAfter);
 
