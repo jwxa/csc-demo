@@ -2,6 +2,8 @@ package com.github.jwxa.controller.scenario;
 
 import com.github.jwxa.scenario.dto.ClientSideCachingMapEntryRequest;
 import com.github.jwxa.scenario.dto.ClientSideCachingWarmupRequest;
+import com.github.jwxa.scenario.dto.EventStormRequest;
+import com.github.jwxa.scenario.dto.ExpirationVerificationRequest;
 import com.github.jwxa.scenario.dto.NearCacheInvalidationRequest;
 import com.github.jwxa.scenario.dto.TtlDriftRequest;
 import com.github.jwxa.scenario.model.ScenarioReport;
@@ -43,6 +45,32 @@ public class NearCacheScenarioController {
         return scenarioService.simulateMapEntryInvalidation(request);
     }
 
+
+
+    @PostMapping("/expire-policy")
+    public ScenarioReport verifyExpiration(@RequestBody ExpirationVerificationRequest request) {
+        log.info("[ScenarioController] verify expiration policy, key={}", request.key());
+        return scenarioService.verifyExpirationPolicy(request);
+    }
+
+    @PostMapping("/event-storm")
+    public ScenarioReport simulateEventStorm(@RequestBody EventStormRequest request) {
+        log.info("[ScenarioController] simulate event storm, key={}", request.key());
+        return scenarioService.simulateEventStorm(request);
+    }
+
+    @PostMapping("/cluster/topology")
+    public ScenarioReport inspectClusterTopology() {
+        log.info("[ScenarioController] inspect cluster topology snapshot");
+        return scenarioService.inspectClusterTopology();
+    }
+
+    @PostMapping("/cluster/replica-readiness")
+    public ScenarioReport inspectReplicaReadiness() {
+        log.info("[ScenarioController] inspect replica readiness");
+        return scenarioService.inspectReplicaReadiness();
+    }
+
     @PostMapping("/csc/warmup")
     public ScenarioReport warmupClientSideCaching(@RequestBody ClientSideCachingWarmupRequest request) {
         log.info("[ScenarioController] warmup client side cache bucket");
@@ -55,3 +83,4 @@ public class NearCacheScenarioController {
         return scenarioService.inspectClientSideCachingState();
     }
 }
+

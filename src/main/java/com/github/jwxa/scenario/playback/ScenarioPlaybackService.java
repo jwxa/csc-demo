@@ -3,6 +3,8 @@ package com.github.jwxa.scenario.playback;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.jwxa.scenario.dto.ClientSideCachingMapEntryRequest;
 import com.github.jwxa.scenario.dto.ClientSideCachingWarmupRequest;
+import com.github.jwxa.scenario.dto.EventStormRequest;
+import com.github.jwxa.scenario.dto.ExpirationVerificationRequest;
 import com.github.jwxa.scenario.dto.NearCacheInvalidationRequest;
 import com.github.jwxa.scenario.dto.TtlDriftRequest;
 import com.github.jwxa.scenario.model.ScenarioReport;
@@ -73,6 +75,12 @@ public class ScenarioPlaybackService {
             case "csc-state" -> scenarioService.inspectClientSideCachingState();
             case "csc-warmup" -> scenarioService.warmupClientSideCaching(
                     convert(parameters, ClientSideCachingWarmupRequest.class));
+            case "expire-policy" -> scenarioService.verifyExpirationPolicy(
+                    convert(parameters, ExpirationVerificationRequest.class));
+            case "event-storm" -> scenarioService.simulateEventStorm(
+                    convert(parameters, EventStormRequest.class));
+            case "cluster-topology" -> scenarioService.inspectClusterTopology();
+            case "replica-readiness" -> scenarioService.inspectReplicaReadiness();
             default -> throw new IllegalArgumentException("Unsupported scenario: " + scenario);
         };
     }
@@ -81,3 +89,5 @@ public class ScenarioPlaybackService {
         return objectMapper.convertValue(parameters, target);
     }
 }
+
+
