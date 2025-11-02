@@ -8,6 +8,7 @@ import com.github.jwxa.scenario.dto.NearCacheInvalidationRequest;
 import com.github.jwxa.scenario.dto.NearCacheStatusRequest;
 import com.github.jwxa.scenario.dto.StringChurnRequest;
 import com.github.jwxa.scenario.dto.TtlDriftRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.jwxa.scenario.model.ScenarioReport;
 import com.github.jwxa.scenario.model.ScenarioStep;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,7 @@ public class NearCacheScenarioService {
     private final RMap<String, String> scenarioClientSideCachingMap;
     private final RBucket<String> scenarioClientSideCachingBucket;
     private final RMap<String, Map<String, String>> scenarioClientSideCachingHash;
+    private final ObjectMapper objectMapper;
 
     public ScenarioReport simulateNearCacheInvalidation(NearCacheInvalidationRequest request) {
         List<ScenarioStep> steps = new ArrayList<>();
@@ -79,11 +81,18 @@ public class NearCacheScenarioService {
         if (!consistent) {
             long extraWait = Math.max(100L, request.awaitMillis());
             waitQuietly(extraWait);
+            finalObservation.put("extraWaitMillis", extraWait);
             String localAfterDelay = scenarioClientSideCachingMap.get(request.key());
             finalObservation.put("localAfterDelay", localAfterDelay);
-            finalObservation.put("extraWaitMillis", extraWait);
             boolean consistentAfterDelay = remoteAfter == null ? localAfterDelay == null : remoteAfter.equals(localAfterDelay);
             finalObservation.put("consistentAfterDelay", consistentAfterDelay);
+            if (!consistentAfterDelay) {
+                Map<String, String> fullReload = scenarioClientSideCachingMap.readAllMap();
+                String localAfterReload = fullReload.get(request.key());
+                finalObservation.put("localAfterReload", localAfterReload);
+                boolean consistentAfterReload = remoteAfter == null ? localAfterReload == null : remoteAfter.equals(localAfterReload);
+                finalObservation.put("consistentAfterReload", consistentAfterReload);
+            }
         }
         steps.add(step("eventual-check",
                 "Re-check consistency after optional extra wait to demonstrate eventual convergence",
@@ -177,15 +186,17 @@ public class NearCacheScenarioService {
         Map<String, String> initial = new HashMap<>();
         initial.put(request.field(), request.initialValue());
         scenarioClientSideCachingHash.put(request.key(), initial);
+        Map<String, String> baselineLocal = scenarioClientSideCachingHash.get(request.key());
         steps.add(step("warm-local",
                 "Insert hash-style key into CSC map and cache locally",
-                Map.of("local", scenarioClientSideCachingHash.get(request.key()))));
+                Map.of("local", baselineLocal)));
 
+        Map<String, String> baselineRemote = coerceToMap(remoteMap.get(request.key()));
         steps.add(step("baseline-remote",
                 "Verify Redis hash mirrors the local snapshot",
-                Map.of("remote", remoteMap.get(request.key()))));
+                Map.of("remote", baselineRemote)));
 
-        Map<String, String> remoteMutation = new HashMap<>(remoteMap.getOrDefault(request.key(), Map.of()));
+        Map<String, String> remoteMutation = new HashMap<>(baselineRemote.isEmpty() ? initial : baselineRemote);
         remoteMutation.put(request.field(), request.updatedValue());
         remoteMap.put(request.key(), remoteMutation);
         steps.add(step("remote-mutation",
@@ -195,7 +206,7 @@ public class NearCacheScenarioService {
         waitQuietly(request.awaitMillis());
 
         Map<String, String> localAfter = scenarioClientSideCachingHash.get(request.key());
-        Map<String, String> remoteAfter = remoteMap.get(request.key());
+        Map<String, String> remoteAfter = coerceToMap(remoteMap.get(request.key()));
         steps.add(step("verify-after-window",
                 "After wait window compare local and remote hash values",
                 Map.of("local", localAfter, "remote", remoteAfter, "observedField", request.field())));
@@ -453,6 +464,22 @@ public class NearCacheScenarioService {
                 steps,
                 Map.of("replicaCount", replicaStatus.size())
         );
+    }
+
+
+    private Map<String, String> coerceToMap(Object raw) {
+        Map<String, String> result = new HashMap<>();
+        if (raw instanceof Map<?,?> map) {
+            map.forEach((k, v) -> result.put(String.valueOf(k), v == null ? null : String.valueOf(v)));
+        } else if (raw instanceof String str) {
+            try {
+                Map<?,?> parsed = objectMapper.readValue(str, Map.class);
+                parsed.forEach((k, v) -> result.put(String.valueOf(k), v == null ? null : String.valueOf(v)));
+            } catch (Exception e) {
+                log.warn("Unable to parse hash payload string for key, returning empty map", e);
+            }
+        }
+        return result;
     }
 
     private Map<String, Object> extractNodeInfo(ClusterNode node) {

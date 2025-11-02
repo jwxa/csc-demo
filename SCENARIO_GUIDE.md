@@ -23,7 +23,7 @@ This guide documents the `/scenario` controller and the playback endpoints that 
 
 - API：`POST /scenario/near-cache/invalidation`
 - Visualizer：`Key 无效化`
-- 步骤中新增 `eventual-check`，会再次读取本地缓存以展示最终与远端一致；若仍担心延迟，可调用 `POST /scenario/near-cache/status` 或在页面选择 `Near Cache 状态查询`。
+- `eventual-check` 会在等待后重读一次，并在必要时 `readAllMap()` 强制刷新，以展示最终与远端一致。如需手动核对，可调用 `POST /scenario/near-cache/status` 或在页面选择 `Near Cache 状态查询`。
 
 ---
 
