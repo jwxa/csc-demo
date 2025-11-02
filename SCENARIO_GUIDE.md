@@ -23,7 +23,7 @@ This guide documents the `/scenario` controller and the playback endpoints that 
 
 - API：`POST /scenario/near-cache/invalidation`
 - Visualizer：`Key 无效化`
-- 关注：`steps[3].observations.local` 应等于最新值
+- 关注：`steps[3].observations.local` 应等于最新值。如需事后核对，可调用 `POST /scenario/near-cache/status` 或在可视化页选择 `Near Cache 状态查询`。
 
 ---
 

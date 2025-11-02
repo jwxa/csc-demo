@@ -89,6 +89,10 @@
                 <div><label>initialValue</label><textarea id="invInitial">{"name":"alpha","version":1}</textarea></div>
                 <div><label>updatedValue</label><textarea id="invUpdated">{"name":"alpha","version":2}</textarea></div>
             </div>` ,
+        'near-cache-status': `
+            <div class="form-grid">
+                <div><label>Key</label><input id="statusKey" value="user:128"></div>
+            </div>` ,
         'hash-invalidation': `
             <div class="form-grid">
                 <div><label>Hash Key</label><input id="hashKey" value="profile:2001"></div>
@@ -204,6 +208,11 @@
                     initialValue: document.getElementById('invInitial').value,
                     updatedValue: document.getElementById('invUpdated').value,
                     awaitMillis: Number(document.getElementById('invAwait').value || 0)
+                }};
+                break;
+            case 'near-cache-status':
+                payload = { scenario, parameters: {
+                    key: document.getElementById('statusKey').value
                 }};
                 break;
             case 'hash-invalidation':

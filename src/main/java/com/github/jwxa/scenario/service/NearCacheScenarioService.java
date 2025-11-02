@@ -5,6 +5,7 @@ import com.github.jwxa.scenario.dto.ClientSideCachingWarmupRequest;
 import com.github.jwxa.scenario.dto.EventStormRequest;
 import com.github.jwxa.scenario.dto.ExpirationVerificationRequest;
 import com.github.jwxa.scenario.dto.NearCacheInvalidationRequest;
+import com.github.jwxa.scenario.dto.NearCacheStatusRequest;
 import com.github.jwxa.scenario.dto.StringChurnRequest;
 import com.github.jwxa.scenario.dto.TtlDriftRequest;
 import com.github.jwxa.scenario.model.ScenarioReport;
@@ -189,6 +190,32 @@ public class NearCacheScenarioService {
                         "field", request.field(),
                         "awaitMillis", request.awaitMillis()
                 ));
+    }
+
+
+    public ScenarioReport inspectNearCacheStatus(NearCacheStatusRequest request) {
+        List<ScenarioStep> steps = new ArrayList<>();
+        RMap<String, String> remoteMap = redissonClient.getMap(scenarioClientSideCachingMap.getName());
+
+        String localValue = scenarioClientSideCachingMap.get(request.key());
+        String remoteValue = remoteMap.get(request.key());
+        Map<String, Object> observation = new HashMap<>();
+        observation.put("key", request.key());
+        observation.put("local", localValue);
+        observation.put("remote", remoteValue);
+        observation.put("localPresent", localValue != null);
+        observation.put("remotePresent", remoteValue != null);
+
+        steps.add(step("snapshot",
+                "Compare CSC local cache with Redis value for given key",
+                observation));
+
+        return new ScenarioReport(
+                "near-cache-status",
+                Instant.now(),
+                steps,
+                observation
+        );
     }
 
     public ScenarioReport verifyExpirationPolicy(ExpirationVerificationRequest request) {

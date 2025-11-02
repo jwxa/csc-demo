@@ -47,6 +47,13 @@ public class NearCacheScenarioController {
 
 
 
+
+    @PostMapping("/near-cache/status")
+    public ScenarioReport inspectNearCacheStatus(@RequestBody NearCacheStatusRequest request) {
+        log.info("[ScenarioController] inspect near cache status, key={}", request.key());
+        return scenarioService.inspectNearCacheStatus(request);
+    }
+
     @PostMapping("/expire-policy")
     public ScenarioReport verifyExpiration(@RequestBody ExpirationVerificationRequest request) {
         log.info("[ScenarioController] verify expiration policy, key={}", request.key());

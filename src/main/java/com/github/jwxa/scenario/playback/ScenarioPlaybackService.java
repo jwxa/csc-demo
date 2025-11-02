@@ -5,6 +5,7 @@ import com.github.jwxa.scenario.dto.ClientSideCachingMapEntryRequest;
 import com.github.jwxa.scenario.dto.ClientSideCachingWarmupRequest;
 import com.github.jwxa.scenario.dto.EventStormRequest;
 import com.github.jwxa.scenario.dto.ExpirationVerificationRequest;
+import com.github.jwxa.scenario.dto.StringChurnRequest;
 import com.github.jwxa.scenario.dto.NearCacheInvalidationRequest;
 import com.github.jwxa.scenario.dto.TtlDriftRequest;
 import com.github.jwxa.scenario.model.ScenarioReport;
@@ -72,6 +73,8 @@ public class ScenarioPlaybackService {
                     convert(parameters, TtlDriftRequest.class));
             case "hash-invalidation" -> scenarioService.simulateMapEntryInvalidation(
                     convert(parameters, ClientSideCachingMapEntryRequest.class));
+            case "near-cache-status" -> scenarioService.inspectNearCacheStatus(
+                    convert(parameters, NearCacheStatusRequest.class));
             case "csc-state" -> scenarioService.inspectClientSideCachingState();
             case "csc-warmup" -> scenarioService.warmupClientSideCaching(
                     convert(parameters, ClientSideCachingWarmupRequest.class));
@@ -81,6 +84,8 @@ public class ScenarioPlaybackService {
                     convert(parameters, EventStormRequest.class));
             case "cluster-topology" -> scenarioService.inspectClusterTopology();
             case "replica-readiness" -> scenarioService.inspectReplicaReadiness();
+            case "string-churn" -> scenarioService.simulateStringChurn(
+                    convert(parameters, StringChurnRequest.class));
             default -> throw new IllegalArgumentException("Unsupported scenario: " + scenario);
         };
     }
