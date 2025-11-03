@@ -38,6 +38,16 @@
 </head>
 <body>
 <div class="panel">
+    <h1>Redis Cluster 监控 / 控制台</h1>
+    <div id="rc-status" class="status-bar">初始化状态加载中...</div>
+    <div style="margin:8px 0 14px 0;">
+        <button id="rc-start">启动集群</button>
+        <button id="rc-stop" class="secondary">停止集群</button>
+    </div>
+    <div id="rc-summary" class="json-preview" style="display:none;"></div>
+    <div id="rc-nodes" class="json-preview" style="margin-top:8px; max-height:220px; overflow:auto; display:none;"></div>
+</div>
+<div class="panel">
     <h1>Client-Side Caching 场景可视化演练</h1>
     <p>选择场景并填写参数，点击「执行场景」后可通过「下一步」逐步查看 CSC 的执行过程。如需重新开始，可点击「重置」。</p>
 
@@ -356,6 +366,61 @@
     resetBtn.addEventListener('click', resetPlayback);
 
     renderForm();
+
+    // ---- Redis Cluster Monitoring & Controls ----
+    const rcStatus = document.getElementById('rc-status');
+    const rcSummary = document.getElementById('rc-summary');
+    const rcNodes = document.getElementById('rc-nodes');
+    const rcStartBtn = document.getElementById('rc-start');
+    const rcStopBtn = document.getElementById('rc-stop');
+
+    async function refreshClusterStatus() {
+        try {
+            const res = await fetch('/redis-cluster/status');
+            const data = await res.json();
+            if (data.online) {
+                rcStatus.textContent = `在线 · masters=${data.masterCount} replicas=${data.replicaCount}`;
+                rcStatus.className = 'status-bar success';
+            } else {
+                rcStatus.textContent = '离线';
+                rcStatus.className = 'status-bar error';
+            }
+            rcSummary.style.display = 'block';
+            rcSummary.textContent = JSON.stringify({ online: data.online, masterCount: data.masterCount, replicaCount: data.replicaCount, error: data.error }, null, 2);
+            rcNodes.style.display = 'block';
+            rcNodes.textContent = JSON.stringify(data.nodes || [], null, 2);
+        } catch (e) {
+            rcStatus.textContent = '状态获取失败';
+            rcStatus.className = 'status-bar error';
+        }
+    }
+
+    async function callCluster(endpoint, okMsg) {
+        try {
+            rcStartBtn.disabled = true; rcStopBtn.disabled = true;
+            const resp = await fetch(`/redis-cluster/${endpoint}`, { method: 'POST' });
+            const payload = await resp.json().catch(() => ({}));
+            if (resp.ok) {
+                rcStatus.textContent = okMsg;
+                rcStatus.className = 'status-bar success';
+            } else {
+                rcStatus.textContent = `操作失败: ${payload.stderr || payload.stdout || 'unknown'}`;
+                rcStatus.className = 'status-bar error';
+            }
+        } catch (err) {
+            rcStatus.textContent = '调用失败, 请检查服务端日志';
+            rcStatus.className = 'status-bar error';
+        } finally {
+            rcStartBtn.disabled = false; rcStopBtn.disabled = false;
+            setTimeout(refreshClusterStatus, 1500);
+        }
+    }
+
+    rcStartBtn.addEventListener('click', () => callCluster('start', '启动命令已下发'));
+    rcStopBtn.addEventListener('click', () => callCluster('stop', '停止命令已下发'));
+
+    refreshClusterStatus();
+    setInterval(refreshClusterStatus, 2000);
 </script>
 </body>
 </html>
