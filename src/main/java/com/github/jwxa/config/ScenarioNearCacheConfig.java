@@ -11,7 +11,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Duration;
-import java.util.Map;
 
 /**
  * Provides ClientSideCaching-based structures for near cache experiments, avoiding Redisson LocalCachedMap.
@@ -22,7 +21,6 @@ public class ScenarioNearCacheConfig {
 
     private static final String CSC_MAP_NAME = "scenario:csc-map";
     private static final String CSC_BUCKET_NAME = "scenario:csc-bucket";
-    private static final String CSC_HASH_NAME = "scenario:csc-map-hash";
 
     @Bean
     public RMap<String, String> scenarioClientSideCachingMap(RedissonClient client) {
@@ -47,17 +45,4 @@ public class ScenarioNearCacheConfig {
         return bucket;
     }
 
-    @Bean
-    @SuppressWarnings("unchecked")
-    public RMap<String, Map<String, String>> scenarioClientSideCachingHash(RedissonClient client) {
-        ClientSideCachingOptions hashOptions = ClientSideCachingOptions.defaults()
-                .size(512)
-                .timeToLive(Duration.ofMinutes(3))
-                .maxIdle(Duration.ofMinutes(5));
-        RClientSideCaching csc = client.getClientSideCaching(hashOptions);
-        RMap<String, Map<String, String>> hashMap = csc.getMap(CSC_HASH_NAME);
-        hashMap.addListener((TrackingListener) name ->
-                log.debug("[ScenarioNearCacheConfig] CSC hash tracking event -> {}", name));
-        return hashMap;
-    }
 }

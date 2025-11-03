@@ -65,8 +65,6 @@ public class ScenarioPlaybackService {
                     convert(parameters, NearCacheInvalidationRequest.class));
             case "ttl-drift" -> scenarioService.simulateTtlDrift(
                     convert(parameters, TtlDriftRequest.class));
-            case "hash-invalidation" -> scenarioService.simulateMapEntryInvalidation(
-                    convert(parameters, ClientSideCachingMapEntryRequest.class));
             case "near-cache-status" -> scenarioService.inspectNearCacheStatus(
                     convert(parameters, NearCacheStatusRequest.class));
             case "csc-state" -> scenarioService.inspectClientSideCachingState();

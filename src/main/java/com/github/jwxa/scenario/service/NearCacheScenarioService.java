@@ -1,6 +1,5 @@
 package com.github.jwxa.scenario.service;
 
-import com.github.jwxa.scenario.dto.ClientSideCachingMapEntryRequest;
 import com.github.jwxa.scenario.dto.ClientSideCachingWarmupRequest;
 import com.github.jwxa.scenario.dto.EventStormRequest;
 import com.github.jwxa.scenario.dto.ExpirationVerificationRequest;
@@ -8,7 +7,6 @@ import com.github.jwxa.scenario.dto.NearCacheInvalidationRequest;
 import com.github.jwxa.scenario.dto.NearCacheStatusRequest;
 import com.github.jwxa.scenario.dto.StringChurnRequest;
 import com.github.jwxa.scenario.dto.TtlDriftRequest;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.jwxa.scenario.model.ScenarioReport;
 import com.github.jwxa.scenario.model.ScenarioStep;
 import lombok.RequiredArgsConstructor;
@@ -43,8 +41,6 @@ public class NearCacheScenarioService {
     private final RedissonClient redissonClient;
     private final RMap<String, String> scenarioClientSideCachingMap;
     private final RBucket<String> scenarioClientSideCachingBucket;
-    private final RMap<String, Map<String, String>> scenarioClientSideCachingHash;
-    private final ObjectMapper objectMapper;
 
     public ScenarioReport simulateNearCacheInvalidation(NearCacheInvalidationRequest request) {
         List<ScenarioStep> steps = new ArrayList<>();
@@ -146,22 +142,71 @@ public class NearCacheScenarioService {
     }
 
     public ScenarioReport warmupClientSideCaching(ClientSideCachingWarmupRequest request) {
-        scenarioClientSideCachingBucket.set(request.value(), request.ttlSeconds(), TimeUnit.SECONDS);
-        Map<String, Object> observation = new HashMap<>();
-        observation.put("localValue", scenarioClientSideCachingBucket.get());
-        observation.put("remainingTtlMillis", scenarioClientSideCachingBucket.remainTimeToLive());
+        List<ScenarioStep> steps = new ArrayList<>();
+        RBucket<String> remoteBucket = redissonClient.getBucket(scenarioClientSideCachingBucket.getName());
 
-        ScenarioStep step = step("warmup-csc",
-                "Warm up CSC bucket with TTL for upcoming failover or network drills",
-                observation);
+        scenarioClientSideCachingBucket.set(request.initialValue(), request.ttlSeconds(), TimeUnit.SECONDS);
+        steps.add(step("warmup-local",
+                "通过 CSC 客户端写入初始值并构建本地缓存",
+                Map.of(
+                        "localValue", scenarioClientSideCachingBucket.get(),
+                        "ttlMillis", scenarioClientSideCachingBucket.remainTimeToLive()
+                )));
+
+        steps.add(step("baseline-remote",
+                "检查 Redis 中的同步值与 TTL",
+                Map.of(
+                        "remoteValue", remoteBucket.get(),
+                        "ttlMillis", remoteBucket.remainTimeToLive()
+                )));
+
+        remoteBucket.set(request.updatedValue(), request.ttlSeconds(), TimeUnit.SECONDS);
+        steps.add(step("remote-update",
+                "模拟其他节点对 string 键进行更新，触发 CSC 失效",
+                Map.of(
+                        "updatedValue", request.updatedValue(),
+                        "ttlSeconds", request.ttlSeconds()
+                )));
+
+        waitQuietly(request.awaitMillis());
+
+        String localAfter = scenarioClientSideCachingBucket.get();
+        String remoteAfter = remoteBucket.get();
+        Map<String, Object> verification = new HashMap<>();
+        verification.put("localValue", localAfter);
+        verification.put("remoteValue", remoteAfter);
+        verification.put("consistent", remoteAfter == null ? localAfter == null : remoteAfter.equals(localAfter));
+        verification.put("awaitMillis", request.awaitMillis());
+        verification.put("remainingTtlMillis", scenarioClientSideCachingBucket.remainTimeToLive());
+        steps.add(step("verify-after-update",
+                "等待窗口后对比本地缓存与 Redis 中的值",
+                verification));
+
+        if (request.refreshTtl()) {
+            long beforeRefresh = scenarioClientSideCachingBucket.remainTimeToLive();
+            scenarioClientSideCachingBucket.expire(request.refreshTtlSeconds(), TimeUnit.SECONDS);
+            scenarioClientSideCachingBucket.touch();
+            long afterRefresh = scenarioClientSideCachingBucket.remainTimeToLive();
+            steps.add(step("refresh-ttl",
+                    "通过触发本地读取刷新 CSC 剩余 TTL",
+                    Map.of(
+                            "ttlBeforeRefreshMillis", beforeRefresh,
+                            "ttlAfterRefreshMillis", afterRefresh,
+                            "refreshTtlSeconds", request.refreshTtlSeconds()
+                    )));
+        }
 
         return new ScenarioReport(
                 "client-side-cache-warmup",
                 Instant.now(),
-                List.of(step),
+                steps,
                 Map.of(
                         "bucketName", scenarioClientSideCachingBucket.getName(),
-                        "ttlSeconds", request.ttlSeconds()
+                        "initialValue", request.initialValue(),
+                        "updatedValue", request.updatedValue(),
+                        "ttlSeconds", request.ttlSeconds(),
+                        "awaitMillis", request.awaitMillis(),
+                        "refreshTtl", request.refreshTtl()
                 ));
     }
 
@@ -178,50 +223,6 @@ public class NearCacheScenarioService {
                 context
         );
     }
-
-    public ScenarioReport simulateMapEntryInvalidation(ClientSideCachingMapEntryRequest request) {
-        List<ScenarioStep> steps = new ArrayList<>();
-        RMap<String, Map<String, String>> remoteMap = redissonClient.getMap(scenarioClientSideCachingHash.getName());
-
-        Map<String, String> initial = new HashMap<>();
-        initial.put(request.field(), request.initialValue());
-        scenarioClientSideCachingHash.put(request.key(), initial);
-        Map<String, String> baselineLocal = scenarioClientSideCachingHash.get(request.key());
-        steps.add(step("warm-local",
-                "Insert hash-style key into CSC map and cache locally",
-                Map.of("local", baselineLocal)));
-
-        Map<String, String> baselineRemote = coerceToMap(remoteMap.get(request.key()));
-        steps.add(step("baseline-remote",
-                "Verify Redis hash mirrors the local snapshot",
-                Map.of("remote", baselineRemote)));
-
-        Map<String, String> remoteMutation = new HashMap<>(baselineRemote.isEmpty() ? initial : baselineRemote);
-        remoteMutation.put(request.field(), request.updatedValue());
-        remoteMap.put(request.key(), remoteMutation);
-        steps.add(step("remote-mutation",
-                "Simulate another node updating a hash field directly in Redis",
-                Map.of("mutatedField", request.field(), "updatedValue", request.updatedValue())));
-
-        waitQuietly(request.awaitMillis());
-
-        Map<String, String> localAfter = scenarioClientSideCachingHash.get(request.key());
-        Map<String, String> remoteAfter = coerceToMap(remoteMap.get(request.key()));
-        steps.add(step("verify-after-window",
-                "After wait window compare local and remote hash values",
-                Map.of("local", localAfter, "remote", remoteAfter, "observedField", request.field())));
-
-        return new ScenarioReport(
-                "near-cache-csc-hash-invalidation",
-                Instant.now(),
-                steps,
-                Map.of(
-                        "hashName", scenarioClientSideCachingHash.getName(),
-                        "field", request.field(),
-                        "awaitMillis", request.awaitMillis()
-                ));
-    }
-
 
     public ScenarioReport inspectNearCacheStatus(NearCacheStatusRequest request) {
         List<ScenarioStep> steps = new ArrayList<>();
@@ -466,21 +467,6 @@ public class NearCacheScenarioService {
         );
     }
 
-
-    private Map<String, String> coerceToMap(Object raw) {
-        Map<String, String> result = new HashMap<>();
-        if (raw instanceof Map<?,?> map) {
-            map.forEach((k, v) -> result.put(String.valueOf(k), v == null ? null : String.valueOf(v)));
-        } else if (raw instanceof String str) {
-            try {
-                Map<?,?> parsed = objectMapper.readValue(str, Map.class);
-                parsed.forEach((k, v) -> result.put(String.valueOf(k), v == null ? null : String.valueOf(v)));
-            } catch (Exception e) {
-                log.warn("Unable to parse hash payload string for key, returning empty map", e);
-            }
-        }
-        return result;
-    }
 
     private Map<String, Object> extractNodeInfo(ClusterNode node) {
         Map<String, Object> info = new HashMap<>();

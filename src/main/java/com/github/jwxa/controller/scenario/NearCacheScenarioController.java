@@ -34,14 +34,6 @@ public class NearCacheScenarioController {
         return scenarioService.simulateTtlDrift(request);
     }
 
-    @PostMapping("/near-cache/hash-invalidation")
-    public ScenarioReport simulateHashInvalidation(@RequestBody ClientSideCachingMapEntryRequest request) {
-        log.info("[ScenarioController] trigger hash invalidation case, key={} field={}", request.key(), request.field());
-        return scenarioService.simulateMapEntryInvalidation(request);
-    }
-
-
-
 
     @PostMapping("/near-cache/status")
     public ScenarioReport inspectNearCacheStatus(@RequestBody NearCacheStatusRequest request) {

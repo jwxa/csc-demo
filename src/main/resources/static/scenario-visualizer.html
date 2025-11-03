@@ -1,21 +1,23 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <title>CSC 场景可视化演练</title>
     <style>
-        :root { color-scheme: light dark; font-family: "Segoe UI", Arial, sans-serif; }
+        :root { color-scheme: light dark; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
         body { margin: 0; padding: 24px; background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; }
-        h1 { margin-top: 0; font-size: 28px; letter-spacing: 1px; }
-        .panel { background: rgba(15, 23, 42, 0.85); border-radius: 16px; padding: 20px; box-shadow: 0 20px 45px rgba(14, 116, 144, 0.35); max-width: 1100px; margin-bottom: 32px; }
+        h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0.5px; }
+        p { margin-top: 0; margin-bottom: 16px; line-height: 1.6; }
+        .panel { background: rgba(15, 23, 42, 0.85); border-radius: 16px; padding: 20px; box-shadow: 0 20px 45px rgba(14, 116, 144, 0.35); max-width: 1120px; margin-bottom: 32px; }
         label { display: block; margin-bottom: 6px; font-weight: 600; }
         select, input, textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.4); background: rgba(15, 23, 42, 0.6); color: #e2e8f0; margin-bottom: 16px; box-sizing: border-box; }
         textarea { min-height: 80px; resize: vertical; font-family: Consolas, monospace; }
+        input[type="checkbox"] { width: auto; margin-right: 8px; }
         button { cursor: pointer; border: none; padding: 10px 18px; margin-right: 12px; border-radius: 999px; font-weight: 600; color: #0f172a; background: #38bdf8; transition: transform 0.2s, box-shadow 0.2s; }
         button.secondary { background: rgba(148, 163, 184, 0.35); color: #e2e8f0; }
-        button:hover { transform: translateY(-1px); box-shadow: 0 12px 24px rgba(56, 189, 248, 0.45); }
-        button.secondary:hover { box-shadow: 0 12px 24px rgba(148, 163, 184, 0.3); }
+        button:disabled { opacity: 0.55; cursor: not-allowed; }
+        button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 24px rgba(56, 189, 248, 0.45); }
+        button.secondary:hover:not(:disabled) { box-shadow: 0 12px 24px rgba(148, 163, 184, 0.3); }
         .steps-container { display: grid; gap: 12px; margin-top: 20px; }
         .step-card { border-radius: 14px; padding: 16px; border: 1px solid rgba(94, 234, 212, 0.2); background: rgba(15, 23, 42, 0.6); opacity: 0.2; transform: scale(0.96); transition: opacity 0.35s ease, transform 0.35s ease, border-color 0.35s ease; }
         .step-card.active { opacity: 1; transform: scale(1); border-color: rgba(94, 234, 212, 0.6); box-shadow: 0 16px 32px rgba(94, 234, 212, 0.25); }
@@ -27,7 +29,7 @@
         .status-bar.success { color: #86efac; }
         .status-bar.error { color: #fca5a5; }
         .controls { margin-top: 8px; }
-        .context-area { margin-top: 12px; font-size: 14px; color: #cbd5f5; }
+        .context-area { margin-top: 12px; font-size: 14px; color: #cbd5f5; word-break: break-all; white-space: pre-wrap; }
         .context-area code { background: rgba(30, 41, 59, 0.75); padding: 2px 6px; border-radius: 6px; color: #bae6fd; }
         @media (min-width: 860px) {
             .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -36,21 +38,22 @@
 </head>
 <body>
 <div class="panel">
-    <h1>Client-Side Caching 场景可视化</h1>
-    <p>选择场景并填写参数，点击「执行场景」生成会话，然后使用「下一步」逐步执行；如需重新开始，可点击「重置」。</p>
+    <h1>Client-Side Caching 场景可视化演练</h1>
+    <p>选择场景并填写参数，点击「执行场景」后可通过「下一步」逐步查看 CSC 的执行过程。如需重新开始，可点击「重置」。</p>
 
     <div class="status-bar" id="statusBar">尚未执行任何场景。</div>
 
     <label for="scenarioSelect">演练场景 / Scenario</label>
     <select id="scenarioSelect">
         <option value="invalidation">Key 无效化（/scenario/near-cache/invalidation）</option>
-        <option value="hash-invalidation">Hash 字段无效化（/scenario/near-cache/hash-invalidation）</option>
+        <option value="near-cache-status">Near Cache 状态（/scenario/near-cache/status）</option>
         <option value="ttl-drift">TTL 漏斗（/scenario/near-cache/ttl-drift）</option>
         <option value="expire-policy">TTL 过期策略验证（/scenario/expire-policy）</option>
         <option value="event-storm">事件风暴模拟（/scenario/event-storm）</option>
         <option value="string-churn">字符串 Key 批量震荡（/scenario/string-churn）</option>
         <option value="cluster-topology">集群拓扑快照（/scenario/cluster/topology）</option>
         <option value="replica-readiness">读写分离检测（/scenario/cluster/replica-readiness）</option>
+        <option value="csc-warmup">CSC String 新增/更新/刷新（/scenario/csc/warmup）</option>
         <option value="csc-state">CSC Bucket 状态（/scenario/csc/state）</option>
     </select>
 
@@ -74,10 +77,10 @@
     const scenarioSelect = document.getElementById('scenarioSelect');
     const formContainer = document.getElementById('formContainer');
     const stepsContainer = document.getElementById('stepsContainer');
+    const contextArea = document.getElementById('contextArea');
+    const runBtn = document.getElementById('runBtn');
     const nextBtn = document.getElementById('nextBtn');
     const resetBtn = document.getElementById('resetBtn');
-    const runBtn = document.getElementById('runBtn');
-    const contextArea = document.getElementById('contextArea');
 
     let playbackToken = null;
 
@@ -86,20 +89,12 @@
             <div class="form-grid">
                 <div><label>Key</label><input id="invKey" value="user:128"></div>
                 <div><label>awaitMillis</label><input id="invAwait" value="500" type="number" min="0"></div>
-                <div><label>initialValue</label><textarea id="invInitial">{"name":"alpha","version":1}</textarea></div>
-                <div><label>updatedValue</label><textarea id="invUpdated">{"name":"alpha","version":2}</textarea></div>
+                <div><label>initialValue</label><textarea id="invInitial">{ "name": "alpha", "version": 1 }</textarea></div>
+                <div><label>updatedValue</label><textarea id="invUpdated">{ "name": "alpha", "version": 2 }</textarea></div>
             </div>` ,
         'near-cache-status': `
             <div class="form-grid">
                 <div><label>Key</label><input id="statusKey" value="user:128"></div>
-            </div>` ,
-        'hash-invalidation': `
-            <div class="form-grid">
-                <div><label>Hash Key</label><input id="hashKey" value="profile:2001"></div>
-                <div><label>Field</label><input id="hashField" value="email"></div>
-                <div><label>awaitMillis</label><input id="hashAwait" value="500" type="number" min="0"></div>
-                <div><label>initialValue</label><textarea id="hashInitial">alpha@example.com</textarea></div>
-                <div><label>updatedValue</label><textarea id="hashUpdated">beta@example.com</textarea></div>
             </div>` ,
         'ttl-drift': `
             <div class="form-grid">
@@ -121,11 +116,11 @@
                 <div><label>Key</label><input id="stormKey" value="storm:key"></div>
                 <div><label>initialValue</label><input id="stormInitial" value="seed"></div>
                 <div><label>iterations</label><input id="stormIterations" value="50" type="number" min="1"></div>
-                <div><label>pauseMillis (可选)</label><input id="stormPause" value="0" type="number" min="0"></div>
+                <div><label>pauseMillis（可选）</label><input id="stormPause" value="0" type="number" min="0"></div>
             </div>` ,
         'string-churn': `
             <div class="form-grid">
-                <div><label>Prefix</label><input id="churnPrefix" value="load:key"></div>
+                <div><label>prefix</label><input id="churnPrefix" value="csc:string"></div>
                 <div><label>keyCount</label><input id="churnCount" value="500" type="number" min="1"></div>
                 <div><label>iterations</label><input id="churnIterations" value="2000" type="number" min="1"></div>
                 <div><label>payloadSize</label><input id="churnPayload" value="64" type="number" min="1"></div>
@@ -133,6 +128,17 @@
             </div>` ,
         'cluster-topology': `<p>调用 <code>POST /scenario/cluster/topology</code> 获取当前 master/replica 拓扑信息。</p>` ,
         'replica-readiness': `<p>调用 <code>POST /scenario/cluster/replica-readiness</code> 列出副本节点及健康状态。</p>` ,
+        'csc-warmup': `
+            <div class="form-grid">
+                <div><label>initialValue</label><input id="warmupInitial" value="seed-v1"></div>
+                <div><label>updatedValue</label><input id="warmupUpdated" value="seed-v2"></div>
+                <div><label>ttlSeconds</label><input id="warmupTtl" value="30" type="number" min="1"></div>
+                <div><label>awaitMillis</label><input id="warmupAwait" value="200" type="number" min="0"></div>
+                <div>
+                    <label><input id="warmupRefresh" type="checkbox">refreshTtl（刷新 TTL）</label>
+                </div>
+                <div><label>refreshTtlSeconds</label><input id="warmupRefreshTtl" value="60" type="number" min="1"></div>
+            </div>` ,
         'csc-state': `<p>调用 <code>GET /scenario/csc/state</code> 观察 CSC bucket 当前状态。</p>`
     };
 
@@ -167,29 +173,37 @@
     }
 
     function appendStep(step) {
+        if (!step) {
+            return;
+        }
         const index = stepsContainer.children.length;
         const card = document.createElement('div');
         card.className = 'step-card';
+
         const header = document.createElement('div');
         header.className = 'step-header';
         const code = document.createElement('div');
         code.className = 'step-code';
-        code.textContent = step.code;
+        code.textContent = step.code || `step-${index + 1}`;
         const order = document.createElement('div');
         order.textContent = `#${index + 1}`;
         header.appendChild(code);
         header.appendChild(order);
+
         const desc = document.createElement('div');
         desc.className = 'step-desc';
-        desc.textContent = step.description;
+        desc.textContent = step.description || '无额外描述';
+
         card.appendChild(header);
         card.appendChild(desc);
+
         if (step.observations && Object.keys(step.observations).length > 0) {
             const obs = document.createElement('pre');
             obs.className = 'json-preview';
             obs.textContent = JSON.stringify(step.observations, null, 2);
             card.appendChild(obs);
         }
+
         stepsContainer.appendChild(card);
         requestAnimationFrame(() => {
             card.classList.add('active');
@@ -199,6 +213,7 @@
 
     async function runScenario() {
         await resetPlayback();
+
         const scenario = scenarioSelect.value;
         let payload;
         switch (scenario) {
@@ -213,15 +228,6 @@
             case 'near-cache-status':
                 payload = { scenario, parameters: {
                     key: document.getElementById('statusKey').value
-                }};
-                break;
-            case 'hash-invalidation':
-                payload = { scenario, parameters: {
-                    key: document.getElementById('hashKey').value,
-                    field: document.getElementById('hashField').value,
-                    initialValue: document.getElementById('hashInitial').value,
-                    updatedValue: document.getElementById('hashUpdated').value,
-                    awaitMillis: Number(document.getElementById('hashAwait').value || 0)
                 }};
                 break;
             case 'ttl-drift':
@@ -258,13 +264,23 @@
                     pauseMillis: Number(document.getElementById('churnPause').value || 0)
                 }};
                 break;
+            case 'csc-warmup':
+                payload = { scenario, parameters: {
+                    initialValue: document.getElementById('warmupInitial').value,
+                    updatedValue: document.getElementById('warmupUpdated').value,
+                    ttlSeconds: Number(document.getElementById('warmupTtl').value || 30),
+                    awaitMillis: Number(document.getElementById('warmupAwait').value || 0),
+                    refreshTtl: document.getElementById('warmupRefresh').checked,
+                    refreshTtlSeconds: Number(document.getElementById('warmupRefreshTtl').value || 0)
+                }};
+                break;
             case 'cluster-topology':
             case 'replica-readiness':
             case 'csc-state':
                 payload = { scenario, parameters: {} };
                 break;
             default:
-                setStatus('未知场景类型。', 'error');
+                setStatus('未知场景类型', 'error');
                 return;
         }
 
@@ -280,20 +296,20 @@
             }
             const startResult = await startResp.json();
             playbackToken = startResult.token;
-            contextArea.textContent = `Scenario: ${startResult.scenarioCode} | steps: ${startResult.totalSteps} | context: ${JSON.stringify(startResult.context || {}, null, 2)}`;
+            contextArea.textContent = `Scenario: ${startResult.scenarioCode}\nsteps: ${startResult.totalSteps}\ncontext: ${JSON.stringify(startResult.context || {}, null, 2)}`;
 
             if (startResult.totalSteps === 0) {
                 setStatus('场景未返回任何步骤。', 'error');
                 playbackToken = null;
+                nextBtn.disabled = true;
+                resetBtn.disabled = false;
                 return;
             }
 
-            resetBtn.disabled = false;
+            setStatus('场景初始化完成，点击「下一步」逐步执行。', 'success');
             nextBtn.disabled = false;
-            setStatus('场景初始化完成，点击“下一步”逐步执行。', 'success');
-            await fetchNextStep();
+            resetBtn.disabled = false;
         } catch (err) {
-            console.error(err);
             setStatus(`执行失败: ${err.message}`, 'error');
         }
     }
@@ -303,17 +319,21 @@
             setStatus('未初始化场景。', 'error');
             return;
         }
+
         try {
             const resp = await fetch('/scenario/playback/next', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token: playbackToken })
             });
-            if (resp.status === 404) {
-                setStatus('场景未找到或已过期。', 'error');
-                nextBtn.disabled = true;
-                playbackToken = null;
-                return;
+            if (!resp.ok) {
+                if (resp.status === 404) {
+                    setStatus('场景未找到或已过期。', 'error');
+                    playbackToken = null;
+                    nextBtn.disabled = true;
+                    return;
+                }
+                throw new Error(`HTTP ${resp.status}`);
             }
             const payload = await resp.json();
             if (payload.step) {
@@ -326,18 +346,16 @@
                 playbackToken = null;
             }
         } catch (err) {
-            console.error(err);
             setStatus(`获取步骤失败: ${err.message}`, 'error');
         }
     }
 
-    resetBtn.addEventListener('click', () => resetPlayback());
-    nextBtn.addEventListener('click', fetchNextStep);
+    scenarioSelect.addEventListener('change', renderForm);
     runBtn.addEventListener('click', runScenario);
+    nextBtn.addEventListener('click', fetchNextStep);
+    resetBtn.addEventListener('click', resetPlayback);
 
     renderForm();
-    resetPlayback();
-    scenarioSelect.addEventListener('change', renderForm);
 </script>
 </body>
 </html>

@@ -1,0 +1,38 @@
+@startuml
+title CSC String Warmup · 新增/更新/刷新流程
+
+actor Client as C
+participant "Spring Boot\nScenario Controller" as S
+participant "CSC Bucket\n(ClientSideCaching)" as L
+participant "Redis Cluster" as R
+participant "Other Node\n(模拟实例)" as O
+
+C -> S : POST /scenario/csc/warmup\n{ initialValue, updatedValue, awaitMillis, refreshTtl? }
+S -> L : set(initialValue, ttlSeconds)\n构建本地缓存并写远端
+L -> R : 传播初始写入
+
+note over L,R
+CSC 缓存与 Redis 完成第一轮一致性
+end note
+
+S -> R : read baseline via\nnon-cached bucket
+R --> S : 返回当前值与 TTL
+
+... 另一个实例更新 ...
+O -> R : SET key updatedValue\n(不经过 CSC)
+R --> L : 发送失效通知
+
+... awaitMillis 时间窗口 ...
+S -> L : get()
+L -> R : 缓存未命中 -> 回源 Redis
+R --> L : updatedValue
+L --> S : 更新后的字符串
+
+opt refreshTtl
+S -> L : expire(refreshTtlSeconds)\n+ touch()
+L --> S : 返回刷新后的 TTL 快照
+end
+
+S --> C : Response steps[] & context\n展示 local/remote/TTL
+
+@enduml

@@ -14,7 +14,6 @@ This guide documents the `/scenario` controller and the playback endpoints that 
   ```bash
   redis-cli -c -h 127.0.0.1 -p 6379 DEL "scenario:csc-map"
   redis-cli -c -h 127.0.0.1 -p 6379 DEL "scenario:csc-bucket"
-  redis-cli -c -h 127.0.0.1 -p 6379 DEL "scenario:csc-map-hash"
   ```
 
 ---
@@ -65,12 +64,19 @@ This guide documents the `/scenario` controller and the playback endpoints that 
 
 ---
 
-## 7. Scenario: CSC Hash Invalidation / Hash 键失效同步
+## 7. Scenario: CSC String Warmup / 字符串新增-更新-刷新
 
-- API：`POST /scenario/near-cache/hash-invalidation`
-- Visualizer：`Hash 字段无效化`
-- 参数：`key`, `field`, `initialValue`, `updatedValue`, `awaitMillis`
-- PlantUML：`docs/csc-hash-flow.puml`
+- API：`POST /scenario/csc/warmup`
+- Visualizer：`CSC String 新增/更新/刷新`
+- 参数：`initialValue`, `updatedValue`, `ttlSeconds`, `awaitMillis`, `refreshTtl`, `refreshTtlSeconds`
+- 步骤说明：
+  1. **warmup-local**：通过 CSC 客户端写入字符串并构建本地缓存，记录 TTL。
+  2. **baseline-remote**：对比 Redis 中的远端字符串与 TTL。
+  3. **remote-update**：模拟其他节点更新字符串，引发 CSC 失效通知。
+  4. **verify-after-update**：等待 `awaitMillis` 后，再次读取字符串确认本地缓存是否同步刷新。
+  5. **refresh-ttl**（可选）：若 `refreshTtl=true`，通过重新设置过期时间 + `touch` 刷新剩余 TTL，观察刷新前后的 TTL 变化。
+- 若需要结合故障演练，可在步骤 3 后执行 Redis 主从切换，再通过 `GET /scenario/csc/state` 验证缓存与远端一致性。
+- PlantUML：`docs/csc-string-warmup.puml`
 
 ---
 
@@ -103,7 +109,6 @@ This guide documents the `/scenario` controller and the playback endpoints that 
 ## 11. Troubleshooting Checklist / 排查清单
 
 - **Map 名称**：`/scenario/near-cache/invalidation` 的 `context.mapName`
-- **Hash 名称**：`/scenario/near-cache/hash-invalidation` 的 `context.hashName`
 - **副本数**：`/scenario/cluster/replica-readiness` 的 `context.replicaCount`
 - **监控指标**：`http://localhost:18080/actuator/metrics/cache.gets` 等
 - **强制清理**：`redis-cli DEL scenario:csc-map`
